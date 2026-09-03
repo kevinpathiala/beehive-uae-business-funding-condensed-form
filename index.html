@@ -2356,8 +2356,18 @@ const StepLoan = ({ data, set }) => {
   );
 };
 
-// ===== STEP: Contact (combined) =====
-const StepContact = ({ data, set, errors }) => {
+// ===== STEP: Contact (part 1 — who) =====
+const StepContactA = ({ data, set, errors }) => (
+  <>
+    <h1 className="q-title">Let's start with your details</h1>
+    <p className="q-sub">Tell us who you are and your business.</p>
+    <TextField label="Your name" value={data.name} onChange={(v) => set({ name: v })} placeholder="First and last name" error={errors.name} autoFocus />
+    <TextField label="Business name" value={data.businessName} onChange={(v) => set({ businessName: v })} placeholder="Trading or legal name" error={errors.businessName} />
+  </>
+);
+
+// ===== STEP: Contact (part 2 — reach) =====
+const StepContactB = ({ data, set, errors }) => {
   const codeOptions = [
     { value: '+971', label: '🇦🇪 +971' },
     { value: '+968', label: '🇴🇲 +968' },
@@ -2368,10 +2378,8 @@ const StepContact = ({ data, set, errors }) => {
   ];
   return (
     <>
-      <h1 className="q-title">Tell us how to reach you</h1>
+      <h1 className="q-title">How can we reach you?</h1>
       <p className="q-sub">A Beehive advisor will reach out within one working day.</p>
-      <TextField label="Your name" value={data.name} onChange={(v) => set({ name: v })} placeholder="First and last name" error={errors.name} autoFocus />
-      <TextField label="Business name" value={data.businessName} onChange={(v) => set({ businessName: v })} placeholder="Trading or legal name" error={errors.businessName} />
       <TextField label="Work email" type="email" inputMode="email" value={data.email} onChange={(v) => set({ email: v })} placeholder="you@business.com" error={errors.email} />
       <PhoneField label="Mobile number" codeValue={data.phoneCode} codeOptions={codeOptions} numberValue={data.phone} onCodeChange={(v) => set({ phoneCode: v })} onNumberChange={(v) => set({ phone: v })} error={errors.phone} />
 
@@ -2391,7 +2399,7 @@ const StepContact = ({ data, set, errors }) => {
 };
 
 Object.assign(window, {
-  StepAge, StepSectorIndustry, StepRevenue, StepLoan, StepContact,
+  StepAge, StepSectorIndustry, StepRevenue, StepLoan, StepContactA, StepContactB,
   formatAED, CURRENCY, FX_FROM_AED, ccyOf, fxOf, fmtMoneyForCountry,
 });
 
@@ -2453,6 +2461,19 @@ const validateContact = (data) => {
   const e = {};
   if (!data.name || data.name.trim().length < 2) e.name = 'Please enter your name';
   if (!data.businessName || data.businessName.trim().length < 2) e.businessName = 'Please enter your business name';
+  if (!data.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) e.email = 'Enter a valid email';
+  if (!isValidPhone(data.phoneCode, data.phone)) e.phone = 'Enter a valid mobile number';
+  if (!data.terms) e.terms = 'Please accept the Terms and Privacy Policy to continue';
+  return e;
+};
+const validateContactA = (data) => {
+  const e = {};
+  if (!data.name || data.name.trim().length < 2) e.name = 'Please enter your name';
+  if (!data.businessName || data.businessName.trim().length < 2) e.businessName = 'Please enter your business name';
+  return e;
+};
+const validateContactB = (data) => {
+  const e = {};
   if (!data.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) e.email = 'Enter a valid email';
   if (!isValidPhone(data.phoneCode, data.phone)) e.phone = 'Enter a valid mobile number';
   if (!data.terms) e.terms = 'Please accept the Terms and Privacy Policy to continue';
@@ -2557,6 +2578,7 @@ const App = () => {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(null);
+  const [contactPage, setContactPage] = useState(0);
 
   // Attach any UTMs relayed from the parent page (see postMessage listener below)
   useEffect(() => {
@@ -2588,8 +2610,8 @@ const App = () => {
     { id: 'sector', component: StepSectorIndustry, isValid: () => !!data.sector && !!data.industry },
     { id: 'revenue', component: StepRevenue, isValid: () => !!data.revenueTouched },
     { id: 'loan', component: StepLoan, isValid: () => !!data.loanTouched },
-    { id: 'contact', component: StepContact, isValid: () => Object.keys(validateContact(data)).length === 0 },
-  ]), [data]);
+    { id: 'contact', component: contactPage === 0 ? StepContactA : StepContactB, isValid: () => contactPage === 0 ? Object.keys(validateContactA(data)).length === 0 : Object.keys(validateContactB(data)).length === 0 },
+  ]), [data, contactPage]);
 
   const total = steps.length;
   const current = steps[stepIdx];
@@ -2604,12 +2626,13 @@ const App = () => {
   }, [stepIdx, total, steps]);
 
   const back = useCallback(() => {
+    if (steps[stepIdx] && steps[stepIdx].id === 'contact' && contactPage === 1) { setContactPage(0); setErrors({}); return; }
     if (stepIdx > 0) {
       let i = stepIdx - 1;
       while (i > 0 && steps[i].skip && steps[i].skip()) i--;
       setStepIdx(i); setErrors({});
     }
-  }, [stepIdx, steps]);
+  }, [stepIdx, steps, contactPage]);
 
   const handleSubmit = async () => {
     const v = validateContact(data);
@@ -2637,8 +2660,12 @@ const App = () => {
   const handleNext = () => {
     window.trackFormStart && window.trackFormStart();
     if (current.id === 'contact') {
-      if (!current.isValid()) return;
-      window.trackEvent && window.trackEvent('form_step_complete', { step: 'contact', step_label: (window.STEP_LABELS && window.STEP_LABELS.contact) || 'contact_details' });
+      if (contactPage === 0) {
+        const v = validateContactA(data);
+        if (Object.keys(v).length) { setErrors(v); return; }
+        window.trackEvent && window.trackEvent('form_step_complete', { step: 'contact_a', step_label: 'contact_details_1' });
+        setContactPage(1); setErrors({}); return;
+      }
       return handleSubmit();
     }
     if (!current.isValid()) return;
@@ -2650,6 +2677,7 @@ const App = () => {
     // Cache stays. Just rewind to step 0.
     setDone(null);
     setStepIdx(0);
+    setContactPage(0);
     setErrors({});
   };
 
@@ -2659,6 +2687,7 @@ const App = () => {
     setData({ ...DEFAULT_DATA });
     setDone(null);
     setStepIdx(0);
+    setContactPage(0);
     setErrors({});
   };
 
@@ -2676,7 +2705,7 @@ const App = () => {
   }, [stepIdx, data, done]);
 
   // Smarter progress: completed steps / total. Reaches 100% only on submit.
-  const progress = (stepIdx / total) * 100;
+  const progress = ((stepIdx + (current && current.id === 'contact' && contactPage === 1 ? 0.5 : 0)) / total) * 100;
 
   // Detect if we have meaningful cached data (other than defaults)
   const hasCachedData = data.businessAge || data.sector || data.industry;
@@ -2728,7 +2757,7 @@ const App = () => {
 
       <main className="main">
         {!done && started && StepComp && (
-          <div key={current.id} className="step">
+          <div key={current.id + '-' + contactPage} className="step">
             <StepComp data={data} set={set} next={next} errors={errors} />
           </div>
         )}
@@ -2747,7 +2776,7 @@ const App = () => {
                 onClick={handleNext}
                 disabled={!current.isValid() || submitting}
               >
-                {submitting ? <><span className="spinner" /> Sending...</> : (current.id === 'contact' ? 'Get My Eligibility' : 'Continue')}
+                {submitting ? <><span className="spinner" /> Sending...</> : ((current.id === 'contact' && contactPage === 1) ? 'Get My Eligibility' : 'Continue')}
               </button>
             </div>
             {(current.id === 'revenue' || current.id === 'loan') && <p className="reassurance-note reassurance-note--footer">Only used to check your eligibility. Never shared.</p>}
