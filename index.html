@@ -2435,6 +2435,8 @@ window.BEEHIVE_FIELD_MAP = {
 // Eligibility logic
 // ============================================================================
 const qualifyLead = (data) => {
+  // We don't fund Tobacco / sheesha businesses
+  if (data.industry === 'TOBACCO') return { qualified: false, reason: 'industry' };
   // We don't lend to businesses under 2 years old
   if (['<6', '6-12', '1-2'].includes(data.businessAge)) return { qualified: false, reason: 'age' };
   // Annual revenue must be at least 2M AED
@@ -2833,7 +2835,9 @@ const ResultScreen = ({ data, result, onRestart, onStartFresh }) => {
 
   const message = qualified
     ? `Based on what you've shared, your business looks like a strong fit for Beehive funding. A representative will be in touch as soon as possible to walk you through the next steps.`
-    : reason === 'age'
+    : reason === 'industry'
+      ? `Unfortunately, Beehive is unable to fund businesses in this industry at this time.`
+      : reason === 'age'
       ? `Unfortunately, Beehive currently funds businesses that have been trading for over 2 years. Once you cross that mark, we'd love to hear from you again.`
       : `Unfortunately, your annual revenue is below our current funding threshold of AED 2,000,000. Let's stay in touch as your business grows.`;
 
